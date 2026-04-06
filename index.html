@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Torneo Dota Lima Pro</title>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+
+  <!-- ============================================================
+       FIREBASE CONFIG — Reemplaza con tus propios valores
+       Sigue las instrucciones al final del archivo
+  ============================================================ -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, where, getDocs }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // 🔧 PASO 1 — Reemplaza estos valores con los de tu proyecto Firebase
+    const firebaseConfig = {
+      apiKey:            "TU_API_KEY",
+      authDomain:        "TU_PROJECT_ID.firebaseapp.com",
+      projectId:         "TU_PROJECT_ID",
+      storageBucket:     "TU_PROJECT_ID.appspot.com",
+      messagingSenderId: "TU_SENDER_ID",
+      appId:             "TU_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    const teamsCol = collection(db, "teams");
+
+    /* ── Escucha en tiempo real ── */
+    const q = query(teamsCol, orderBy("registeredAt", "asc"));
+    onSnapshot(q, (snapshot) => {
+      const teams = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderTeams(teams);
+      updateCounter(teams.length);
+    });
+
+    /* ── Registro de equipo ── */
+    window.registerTeam = async function(teamName, captain, whatsapp) {
+      // Verificar duplicados
+      const dupQ = query(teamsCol, where("teamName", "==", teamName.trim()));
+      const dupSnap = await getDocs(dupQ);
+      if (!dupSnap.empty) throw new Error("DUPLICATE");
+
+      await addDoc(teamsCol, {
+        teamName:     teamName.trim(),
+        captain:      captain.trim(),
+        whatsapp:     whatsapp.trim(),
+        registeredAt: Date.now()
+      });
+    };
+  </script>
+
+  <style>
+    /* ══════════════════════════════════
+       CSS VARIABLES & RESET
+    ══════════════════════════════════ */
+    :root {
+      --bg:         #050a0f;
+      --bg2:        #080e18;
+      --panel:      #0b1220;
+      --border:     #0f2240;
+      --accent:     #00ff88;
+      --accent2:    #00c4ff;
+      --red:        #ff3a3a;
+      --gold:       #ffd700;
+      --text:       #d0e8f0;
+      --text-muted: #5a7a90;
+      --glow:       0 0 20px rgba(0,255,136,.35);
+      --glow2:      0 0 20px rgba(0,196,255,.35);
+      --font-head:  'Orbitron', sans-serif;
+      --font-body:  'Rajdhani', sans-serif;
+      --font-mono:  'Share Tech Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 16px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Background grid + noise ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,255,136,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,196,255,.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── Layout wrapper ── */
+    .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 20px 80px; }
+
+    /* ══════════════════════════════════
+       HERO HEADER
+    ══════════════════════════════════ */
+    header {
+      text-align: center;
+      padding: 60px 20px 40px;
+      position: relative;
+    }
+    .badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: .72rem;
+      letter-spacing: .18em;
+      color: var(--accent);
+      border: 1px solid rgba(0,255,136,.3);
+      padding: 4px 14px;
+      border-radius: 2px;
+      margin-bottom: 24px;
+      animation: pulse-border 2.5s ease infinite;
+    }
+    @keyframes pulse-border {
+      0%,100% { border-color: rgba(0,255,136,.3); }
+      50%      { border-color: rgba(0,255,136,.9); box-shadow: var(--glow); }
+    }
+    .title-wrap { position: relative; display: inline-block; }
+    h1 {
+      font-family: var(--font-head);
+      font-size: clamp(2rem, 6vw, 4.2rem);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #fff 0%, var(--accent2) 50%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 30px rgba(0,196,255,.4));
+    }
+    .subtitle {
+      margin-top: 14px;
+      font-family: var(--font-mono);
+      font-size: .9rem;
+      color: var(--text-muted);
+      letter-spacing: .12em;
+    }
+    .subtitle span { color: var(--accent); }
+
+    /* Decorative lines */
+    .deco-line {
+      display: flex; align-items: center; gap: 16px;
+      margin: 28px auto 0; max-width: 500px;
+    }
+    .deco-line::before, .deco-line::after {
+      content: ''; flex: 1; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    }
+    .deco-line span {
+      font-family: var(--font-mono);
+      color: var(--accent2);
+      font-size: .7rem;
+      letter-spacing: .2em;
+    }
+
+    /* ══════════════════════════════════
+       COUNTER STRIP
+    ══════════════════════════════════ */
+    .counter-strip {
+      display: flex; align-items: center; justify-content: center; gap: 32px;
+      padding: 18px 28px; margin: 0 auto 48px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-top: 2px solid var(--accent);
+      max-width: 700px;
+      clip-path: polygon(12px 0%, 100% 0%, calc(100% - 12px) 100%, 0% 100%);
+    }
+    .counter-item { text-align: center; }
+    .counter-item .num {
+      font-family: var(--font-head);
+      font-size: 2.2rem;
+      font-weight: 900;
+      color: var(--accent);
+      text-shadow: var(--glow);
+      line-height: 1;
+      transition: all .4s ease;
+    }
+    .counter-item .lbl {
+      font-family: var(--font-mono);
+      font-size: .68rem;
+      color: var(--text-muted);
+      letter-spacing: .14em;
+      margin-top: 2px;
+    }
+    .counter-sep { width: 1px; height: 40px; background: var(--border); }
+
+    /* ══════════════════════════════════
+       MAIN GRID
+    ══════════════════════════════════ */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+    @media(max-width: 768px) { .main-grid { grid-template-columns: 1fr; } }
+
+    /* ══════════════════════════════════
+       PANEL (shared card style)
+    ══════════════════════════════════ */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+    .panel::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+    }
+    .panel-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-icon { font-size: 1.3rem; }
+    .panel-title {
+      font-family: var(--font-head);
+      font-size: .85rem;
+      font-weight: 700;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--accent2);
+    }
+    .panel-body { padding: 24px; }
+
+    /* ══════════════════════════════════
+       FORM
+    ══════════════════════════════════ */
+    .field { margin-bottom: 20px; }
+    .field label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: .72rem;
+      letter-spacing: .16em;
+      color: var(--accent2);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .field input {
+      width: 100%;
+      background: rgba(0,196,255,.04);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 12px 16px;
+      font-family: var(--font-body);
+      font-size: 1rem;
+      color: var(--text);
+      outline: none;
+      transition: border-color .25s, box-shadow .25s;
+    }
+    .field input::placeholder { color: var(--text-muted); }
+    .field input:focus {
+      border-color: var(--accent2);
+      box-shadow: 0 0 0 3px rgba(0,196,255,.12), inset 0 0 12px rgba(0,196,255,.04);
+    }
+    .field input.error { border-color: var(--red); }
+
+    .btn-register {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #00c4ff22, #00ff8822);
+      border: 1px solid var(--accent);
+      border-radius: 3px;
+      font-family: var(--font-head);
+      font-size: .9rem;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all .3s ease;
+    }
+    .btn-register::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .btn-register:hover {
+      box-shadow: var(--glow);
+      transform: translateY(-2px);
+    }
+    .btn-register:hover::before { opacity: .12; }
+    .btn-register:active { transform: translateY(0); }
+    .btn-register:disabled {
+      opacity: .5; cursor: not-allowed;
+      transform: none; box-shadow: none;
+    }
+    .btn-register span { position: relative; z-index: 1; }
+
+    /* alerts */
+    .alert {
+      padding: 12px 16px;
+      border-radius: 3px;
+      font-family: var(--font-mono);
+      font-size: .82rem;
+      margin-top: 16px;
+      display: none;
+      animation: fadeIn .3s ease;
+    }
+    .alert.show { display: block; }
+    .alert.success {
+      background: rgba(0,255,136,.08);
+      border: 1px solid rgba(0,255,136,.4);
+      color: var(--accent);
+    }
+    .alert.danger {
+      background: rgba(255,58,58,.08);
+      border: 1px solid rgba(255,58,58,.4);
+      color: var(--red);
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+
+    /* ══════════════════════════════════
+       TEAMS LIST
+    ══════════════════════════════════ */
+    .teams-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .team-card {
+      background: rgba(0,196,255,.03);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent2);
+      border-radius: 3px;
+      padding: 14px 18px;
+      display: flex; align-items: center; gap: 16px;
+      transition: all .25s ease;
+      animation: slideIn .4s ease;
+    }
+    @keyframes slideIn {
+      from { opacity:0; transform:translateX(-12px); }
+      to   { opacity:1; transform:none; }
+    }
+    .team-card:hover {
+      border-left-color: var(--accent);
+      background: rgba(0,255,136,.05);
+      transform: translateX(4px);
+    }
+    .team-num {
+      font-family: var(--font-head);
+      font-size: .75rem;
+      color: var(--accent2);
+      min-width: 28px;
+      text-align: center;
+    }
+    .team-info { flex: 1; min-width: 0; }
+    .team-name {
+      font-family: var(--font-head);
+      font-size: .95rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: .06em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .team-captain {
+      font-family: var(--font-mono);
+      font-size: .72rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .team-captain span { color: var(--accent2); }
+
+    .live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: blink 1.6s ease infinite;
+      flex-shrink: 0;
+    }
+    @keyframes blink {
+      0%,100% { opacity:1; }
+      50%      { opacity:.2; }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-size: .82rem;
+      letter-spacing: .1em;
+    }
+    .empty-state .icon { font-size: 2.4rem; margin-bottom: 12px; }
+
+    /* live indicator header */
+    .live-badge {
+      display: flex; align-items: center; gap: 7px;
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: .65rem;
+      color: var(--accent);
+      letter-spacing: .12em;
+    }
+
+    /* ══════════════════════════════════
+       FOOTER
+    ══════════════════════════════════ */
+    footer {
+      text-align: center;
+      padding: 32px 20px;
+      font-family: var(--font-mono);
+      font-size: .7rem;
+      color: var(--text-muted);
+      letter-spacing: .1em;
+      border-top: 1px solid var(--border);
+      margin-top: 60px;
+    }
+    footer a { color: var(--accent2); text-decoration: none; }
+
+    /* ══════════════════════════════════
+       LOADING OVERLAY
+    ══════════════════════════════════ */
+    #loading {
+      position: fixed; inset: 0; z-index: 999;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
+      transition: opacity .5s ease;
+    }
+    #loading.hide { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-right-color: var(--accent2);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      font-family: var(--font-mono);
+      font-size: .8rem;
+      color: var(--text-muted);
+      letter-spacing: .2em;
+      animation: pulse 1.4s ease infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+  </style>
+</head>
+
+<body>
+
+  <!-- Loading screen -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">INICIALIZANDO SISTEMA...</div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ══ HEADER ══ -->
+    <header>
+      <div class="badge">⚡ SEASON 01 · LIMA · 2025</div>
+      <div class="title-wrap">
+        <h1>Torneo Dota<br>Lima Pro</h1>
+      </div>
+      <p class="subtitle">Registra tu equipo · Compite por la gloria · <span>GRATIS</span></p>
+      <div class="deco-line"><span>◆ OFFICIAL REGISTRATION ◆</span></div>
+    </header>
+
+    <!-- ══ COUNTER STRIP ══ -->
+    <div class="counter-strip">
+      <div class="counter-item">
+        <div class="num" id="counter-registered">0</div>
+        <div class="lbl">EQUIPOS INSCRITOS</div>
+      </div>
+      <div class="counter-sep"></div>
+      <div class="counter-item">
+        <div class="num" style="color:var(--gold); text-shadow:0 0 20px rgba(255,215,0,.4)">16</div>
+        <div class="lbl">CUPOS MÁXIMOS</div>
+      </div>
+      <div class="counter-sep"></div>
+      <div class="counter-item">
+        <div class="num" id="counter-slots" style="color:var(--accent2); text-shadow:var(--glow2)">16</div>
+        <div class="lbl">CUPOS LIBRES</div>
+      </div>
+    </div>
+
+    <!-- ══ MAIN GRID ══ -->
+    <div class="main-grid">
+
+      <!-- FORM PANEL -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-icon">🎮</span>
+          <span class="panel-title">Inscribir Equipo</span>
+        </div>
+        <div class="panel-body">
+          <div class="field">
+            <label>Nombre del equipo</label>
+            <input type="text" id="f-team" placeholder="Ej: Shadow Wolves" maxlength="30"/>
+          </div>
+          <div class="field">
+            <label>Capitán</label>
+            <input type="text" id="f-captain" placeholder="Tu nombre ingame" maxlength="30"/>
+          </div>
+          <div class="field">
+            <label>WhatsApp</label>
+            <input type="tel" id="f-whatsapp" placeholder="+51 999 999 999" maxlength="15"/>
+          </div>
+
+          <button class="btn-register" onclick="handleRegister()">
+            <span>⚡ REGISTRAR EQUIPO</span>
+          </button>
+
+          <div class="alert success" id="alert-success">
+            ✅ ¡Equipo registrado con éxito! Redirigiendo al grupo de WhatsApp...
+          </div>
+          <div class="alert danger" id="alert-error"></div>
+        </div>
+      </div>
+
+      <!-- TEAMS PANEL -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-icon">🏆</span>
+          <span class="panel-title">Equipos Registrados</span>
+          <div class="live-badge">
+            <div class="live-dot"></div> EN VIVO
+          </div>
+        </div>
+        <div class="panel-body" style="padding:16px;">
+          <div class="teams-list" id="teams-list">
+            <div class="empty-state">
+              <div class="icon">🎯</div>
+              <div>Esperando equipos...<br>¡Sé el primero en inscribirte!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main-grid -->
+  </div><!-- /wrap -->
+
+  <footer>
+    <div>TORNEO DOTA LIMA PRO · SEASON 01</div>
+    <div style="margin-top:6px">Powered by Firebase · Hecho en Lima 🇵🇪</div>
+  </footer>
+
+  <!-- ══════════════════════════════════
+       JAVASCRIPT — Lógica UI
+  ══════════════════════════════════ -->
+  <script>
+    const MAX_SLOTS = 16;
+
+    /* ── Hide loader when Firebase fires first snapshot ── */
+    let loaderHidden = false;
+    function hideLoader() {
+      if (loaderHidden) return;
+      loaderHidden = true;
+      const el = document.getElementById('loading');
+      el.classList.add('hide');
+      setTimeout(() => el.remove(), 600);
+    }
+
+    /* ── Render team cards ── */
+    function renderTeams(teams) {
+      hideLoader();
+      const list = document.getElementById('teams-list');
+
+      if (teams.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="icon">🎯</div>
+            <div>Esperando equipos...<br>¡Sé el primero en inscribirte!</div>
+          </div>`;
+        return;
+      }
+
+      list.innerHTML = teams.map((t, i) => `
+        <div class="team-card">
+          <div class="team-num">#${String(i+1).padStart(2,'0')}</div>
+          <div class="team-info">
+            <div class="team-name">${escapeHtml(t.teamName)}</div>
+            <div class="team-captain">Cap: <span>${escapeHtml(t.captain)}</span></div>
+          </div>
+          <div class="live-dot"></div>
+        </div>
+      `).join('');
+    }
+
+    /* ── Update counters ── */
+    function updateCounter(count) {
+      document.getElementById('counter-registered').textContent = count;
+      const free = Math.max(0, MAX_SLOTS - count);
+      document.getElementById('counter-slots').textContent = free;
+      if (free === 0) {
+        document.getElementById('counter-slots').style.color = 'var(--red)';
+      }
+    }
+
+    /* ── Handle registration ── */
+    async function handleRegister() {
+      const btn      = document.querySelector('.btn-register');
+      const teamName = document.getElementById('f-team').value.trim();
+      const captain  = document.getElementById('f-captain').value.trim();
+      const whatsapp = document.getElementById('f-whatsapp').value.trim();
+
+      clearAlerts();
+
+      // Validación
+      let hasError = false;
+      [['f-team', teamName], ['f-captain', captain], ['f-whatsapp', whatsapp]].forEach(([id, val]) => {
+        const el = document.getElementById(id);
+        if (!val) { el.classList.add('error'); hasError = true; }
+        else el.classList.remove('error');
+      });
+      if (hasError) { showError('⚠ Por favor completa todos los campos.'); return; }
+
+      // Cupos
+      const count = parseInt(document.getElementById('counter-registered').textContent);
+      if (count >= MAX_SLOTS) { showError('⛔ Lo sentimos, los cupos están llenos.'); return; }
+
+      btn.disabled = true;
+      btn.querySelector('span').textContent = '⏳ REGISTRANDO...';
+
+      try {
+        await window.registerTeam(teamName, captain, whatsapp);
+        showSuccess();
+        document.getElementById('f-team').value    = '';
+        document.getElementById('f-captain').value = '';
+        document.getElementById('f-whatsapp').value= '';
+        // Redirigir a WhatsApp después de 2.5s
+        setTimeout(() => {
+          window.open('https://chat.whatsapp.com/EDLgOCOg7dACXYFtHRhDIu?mode=gi_t', '_blank');
+        }, 2500);
+      } catch(err) {
+        if (err.message === 'DUPLICATE') {
+          showError('⚠ Ya existe un equipo con ese nombre. Elige otro.');
+        } else {
+          showError('❌ Error al registrar. Verifica tu conexión o la configuración de Firebase.');
+          console.error(err);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.querySelector('span').textContent = '⚡ REGISTRAR EQUIPO';
+      }
+    }
+
+    function showSuccess() {
+      document.getElementById('alert-success').classList.add('show');
+    }
+    function showError(msg) {
+      const el = document.getElementById('alert-error');
+      el.textContent = msg;
+      el.classList.add('show');
+    }
+    function clearAlerts() {
+      document.getElementById('alert-success').classList.remove('show');
+      document.getElementById('alert-error').classList.remove('show');
+    }
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    /* ── Fallback: hide loader after 5s if Firebase no conecta ── */
+    setTimeout(hideLoader, 5000);
+  </script>
+
+  <!--
+  ══════════════════════════════════════════════════════════════════
+  📋 INSTRUCCIONES DE CONFIGURACIÓN FIREBASE
+  ══════════════════════════════════════════════════════════════════
+
+  PASO 1 — Crear proyecto Firebase
+    1. Ve a https://console.firebase.google.com
+    2. Crea un proyecto nuevo (ej: "dota-lima-pro")
+    3. En el panel del proyecto → "Agregar app" → elige WEB (</>)
+    4. Copia el objeto firebaseConfig que te genera
+
+  PASO 2 — Reemplaza en este archivo (línea ~38)
+    const firebaseConfig = {
+      apiKey:            "PEGA_AQUI",
+      authDomain:        "PEGA_AQUI",
+      projectId:         "PEGA_AQUI",
+      storageBucket:     "PEGA_AQUI",
+      messagingSenderId: "PEGA_AQUI",
+      appId:             "PEGA_AQUI"
+    };
+
+  PASO 3 — Activar Firestore
+    En Firebase Console → "Firestore Database" → "Crear base de datos"
+    Elige modo TEST (para pruebas) o configura reglas de seguridad
+
+  PASO 4 — Publicar en GitHub Pages
+    1. Sube el archivo index.html a un repo de GitHub
+    2. Settings → Pages → Source: main branch / root
+    3. Tu URL será: https://TU_USUARIO.github.io/TU_REPO/
+
+  ══════════════════════════════════════════════════════════════════
+  -->
+
+</body>
+</html>
